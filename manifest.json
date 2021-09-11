@@ -1,0 +1,17 @@
+{
+	"manifest_version": 2,
+	"name": "ViewPower+",
+	"description": "This extension adds functionality to ViewPower, such as wattage consumed and remaining battery time.",
+	"version": "1.0.4",
+
+	"permissions": [
+   		"activeTab"
+ 	],
+	"content_scripts": [    
+		{ 
+		"run_at" :"document_idle",
+		"matches": ["http://localhost:15178/ViewPower/*"],
+		"js": ["jquery-1.12.4.min.js", "script.js"]
+		}
+	]
+}
