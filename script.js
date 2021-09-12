@@ -41,37 +41,49 @@ function batteryRemainingSeconds(watts, battery_percentage/*[0.0-1.0]*/){
 	return sec*battery_percentage;
 }
 
-function calcBatteryTimeRemaining(){
-	//TODO(fran): my algorithm may not be correct and is also very very veery basic
-		//TODO(fran): also remember that wattage vs battery time is not linear at all, both apc and eaton had some graphs we could convert into functions for times, idk whether vertiv/lierbert has some
-	//TODO(fran): if no big change has happened since the last execution of the function simply subtract 1 sec, only do this if we are on battery mode
-	var e_voltage_output = document.getElementById("powerflow_[text.outputV]:");//expressed in Volts
-	var e_wattage_output = document.getElementById("wattage");//expressed in Watts
-	var e_battery_percentage = document.getElementById("powerflow_[text.BatteryPercent]:");//expressed in 0-100 (percentage)
-	if(e_voltage_output != null && e_wattage_output != null && e_battery_percentage != null){
-		/*
-		var V_out = parseFloat(e_voltage_output.value);//voltage
-		var W_out = parseFloat(e_wattage_output.value);//wattage
-		var Ah_remaining = (e_battery_percentage.value/parseFloat(100)) * 2 * 9;//amp x hour //TODO(fran): batteries are 12V, somehow that has to become 220V, that should probably be taken into account in some way
-		//NOTE: equation: W = A x V   --->   A = W / V
-		var A_current_consumption = W_out/V_out; //Current amps being consumed
+var calcBatteryTimeRemaining = (function(){
 
-		var seconds_remaining = Math.round((Ah_remaining/A_current_consumption)*3600);
-
-		var outstr = secondsToHms(seconds_remaining);
-
-		$("#battery_time_remaining").val(outstr);
-		*/
-
-		var seconds_remaining = Math.round(batteryRemainingSeconds(parseFloat(e_wattage_output.value), e_battery_percentage.value/parseFloat(100)));
-
-		var outstr = secondsToHms(seconds_remaining);
-
-		$("#battery_time_remaining").val(outstr);
-	}
+	//https://stackoverflow.com/questions/1535631/static-variables-in-javascript
+	// Perform "static" variable initialization
+    var wattage_accumulated = new Array(10);
+	var index=0;
+	var usable_range=0;
 	
-	setTimeout(calcBatteryTimeRemaining,1000);
-}
+	return function(){
+		//TODO(fran): if no big change has happened since the last execution of the function simply subtract 1 sec, only do this if we are on battery mode
+		var e_voltage_output = document.getElementById("powerflow_[text.outputV]:");//expressed in Volts
+		var e_wattage_output = document.getElementById("wattage");//expressed in Watts
+		var e_battery_percentage = document.getElementById("powerflow_[text.BatteryPercent]:");//expressed in 0-100 (percentage)
+		if(e_voltage_output != null && e_wattage_output != null && e_battery_percentage != null){
+
+			wattage_accumulated[index++] = parseFloat(e_wattage_output.value);
+			usable_range = Math.max(usable_range, index);
+			index %= wattage_accumulated.length;
+			let W_avg = parseFloat(0);
+			for(let i = 0; i < usable_range; i++) W_avg+=wattage_accumulated[i];
+			W_avg/=usable_range;
+
+			//let seconds_remaining = Math.round(batteryRemainingSeconds(parseFloat(e_wattage_output.value), e_battery_percentage.value/parseFloat(100)));
+			let seconds_remaining = Math.round(batteryRemainingSeconds(W_avg, e_battery_percentage.value/parseFloat(100)));
+			
+			var e_ups_mode = document.getElementById("powerflow_[text.workMod]:");
+			if(e_ups_mode!=null){
+				if(e_ups_mode.value == "Battery mode"){
+					//We are on running on battery, AC has been cut off
+					//Therefore we should subtract 1 second from the seconds_remaining each time this function gets executed
+					//TODO(fran): better algorithm/idea for time subtracting
+					if(seconds_remaining>0) seconds_remaining--;
+				}
+			}
+
+			let outstr = secondsToHms(seconds_remaining);
+
+			$("#battery_time_remaining").val(outstr);
+		}
+		
+		setTimeout(calcBatteryTimeRemaining,1000);
+	}
+})();
 
 $(document).ready(
 	function(){
@@ -95,7 +107,7 @@ $(document).ready(
 
 			e_load_percentage.parentElement.parentElement.parentElement.insertBefore(div,null);
 
-			setTimeout(calcWattage,1000);//TODO(fran): find another method to call this functions on a cycle, this is time dependent and future setTimeouts dont work depending on how long they take to execute 
+			setTimeout(calcWattage,1000);//IMPORTANT TODO(fran): find another method to call this functions on a cycle, this is time dependent and future setTimeouts dont work depending on how long they take to execute 
 		}
 
 		//Battery time remaining
@@ -122,52 +134,3 @@ $(document).ready(
 		}
 	}
 )
-
-/*
-document.addEventListener("click", function(){
-	var e_load_percentage = document.getElementById("powerflow_[label.loadPercents]:");
-	if(e_load_percentage != null){
-		var percentage = e_load_percentage.value;
-
-		var outstr = "" + percentage/parseFloat(100)*900;//TODO(fran): allow the user to indicate max wattage output
-
-		$("#wattage").val(outstr);
-	}
-	
-	if(document.getElementById("wattage") != null){
-		//document.getElementById("wattage").value = outstr; //TODO(fran): this doesnt work, I probably need to use jquery
-	}
-	else{
-	//document.body.insertAdjacentHTML('beforeend', "<div><p id='wattage'>" + outstr + "</p></div>");
-	}
-	
-});
-*/
-
-/*
-document.addEventListener('DOMContentLoaded', function() {
-    //var percentage = Number(document.getElementById("powerflow_[label.loadPercents]:").value) / parseFloat(100);
-    //var res = percentage*900;
-    //var out = "" + res;
-
-  	var el = document.getElementById('powerflow_[label.loadPercents]:');
-	var button = document.createElement("button");
-	var text = document.createTextNode("test");
-	button.appendChild(text);
-	el.appendChild(button);
-	}
-);
-*/
-
-/*
-var p = document.createElement('p');
-p.innerHTML = "Watts";
-p.id = "wattage";
-var div = document.createElement('div');
-div.style = "display: table-row;";//TODO(fran): idk whether I can use/access already existing styles from the page
-div.appendChild(p);
-*/
-
-//var div = createElementFromHTML("<div style='display: table-row; '><p id='wattage'>Watts</p></div>")
-
-//document.body.insertAdjacentHTML('beforeend', "<div><p id='wattage'>" + "Watts" + "</p></div>");
